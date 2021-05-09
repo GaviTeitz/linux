@@ -80,6 +80,7 @@ struct tc_action_ops {
 	char    kind[IFNAMSIZ];
 	__u32   type; /* TBD to match kind */
 	size_t	size;
+	atomic_t delayed_delete;
 	struct module		*owner;
 	int     (*act)(struct sk_buff *, const struct tc_action *,
 		       struct tcf_result *); /* called under RCU BH lock*/
@@ -99,6 +100,7 @@ struct tc_action_ops {
 	size_t  (*get_fill_size)(const struct tc_action *act);
 	struct net_device *(*get_dev)(const struct tc_action *a);
 	void	(*put_dev)(struct net_device *dev);
+	void	(*set_delayed_delete)(struct tc_action *);
 };
 
 struct tc_action_net {

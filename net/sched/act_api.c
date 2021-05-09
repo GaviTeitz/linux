@@ -647,7 +647,8 @@ int tcf_action_destroy(struct tc_action *actions[], int bind)
 {
 	const struct tc_action_ops *ops;
 	struct tc_action *a;
-	int ret = 0, i;
+	int ret = 0, i, j = 0;
+	struct tc_action *t_actions[TCA_ACT_MAX_PRIO] = {NULL};
 
 	for (i = 0; i < TCA_ACT_MAX_PRIO && actions[i]; i++) {
 		a = actions[i];
@@ -658,7 +659,17 @@ int tcf_action_destroy(struct tc_action *actions[], int bind)
 			module_put(ops->owner);
 		else if (ret < 0)
 			return ret;
+		else if (atomic_read(&a->ops->delayed_delete))
+			t_actions[j++] = a;
 	}
+
+	if (j)
+		for (i = 0; i <= j && t_actions[i]; i++) {
+			a = t_actions[i];
+
+			if (!atomic_read(&a->tcfa_bindcnt))
+				tcf_idr_delete_index(a->idrinfo, a->tcfa_index);
+		}
 	return ret;
 }
 
@@ -1183,13 +1194,16 @@ static int tcf_action_delete(struct net *net, struct tc_action *actions[])
 		if (tcf_action_put(a)) {
 			/* last reference, action was deleted concurrently */
 			module_put(ops->owner);
-		} else  {
+		} else {
 			int ret;
 
 			/* now do the delete */
 			ret = tcf_idr_delete_index(idrinfo, act_index);
-			if (ret < 0)
+			if (ret < 0) {
+				if (a->ops->set_delayed_delete)
+					a->ops->set_delayed_delete(a);
 				return ret;
+			}
 		}
 	}
 	return 0;
